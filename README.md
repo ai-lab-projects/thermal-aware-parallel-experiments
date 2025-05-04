@@ -1,20 +1,21 @@
-# CPU Load and Thermal Throttling Analysis Framework
+# Thermal-Aware Parallel Experiments
 
-This project is a Python-based system for running CPU stress experiments under varying levels of parallelism, monitoring CPU temperatures using OpenHardwareMonitor, and analyzing thermal throttling and performance.
+This project provides a Python-based framework for benchmarking CPU performance under thermal constraints, with a focus on understanding how parallel workload scaling interacts with temperature, throttling, and computation throughput.
 
 ## Features
 
-- Run CPU load experiments with configurable numbers of parallel worker processes
-- Monitor CPU temperature in real time using OpenHardwareMonitor
-- Automatically stop computations if temperature stays high too long (extra safety layer)
-- Evaluate optimal number of worker processes by comparing computation counts
-- Optional pause-on-overheat mode for thermal control (disabled by default)
+- Parallel CPU workload generation using configurable number of processes
+- Real-time CPU temperature monitoring using OpenHardwareMonitor
+- Logging of temperature and workload iterations over time
+- Automatic force-stop if CPU temperature remains high for a critical duration
+- Optional pause-on-overheat mechanism (disabled by default)
+- Jupyter notebook for cross-experiment analysis and visualization
 
 ## Requirements
 
 - Python 3.x
-- OpenHardwareMonitor v0.9.6 or compatible  
-  Must be located at  
+- OpenHardwareMonitor (v0.9.6 recommended)  
+  Must be located at:  
   ``openhardwaremonitor-v0.9.6/OpenHardwareMonitor/OpenHardwareMonitor.exe``
 - Python packages:
   - ``numpy``
@@ -29,65 +30,77 @@ Install dependencies with:
 
 ## Usage
 
-### Run Experiments
+### 1. Run Experiments
 
-To execute stress tests with different numbers of worker processes:
+To execute tests across different numbers of worker processes:
 
 ``python experiment_runner.py``
 
-This runs tests with multiple process counts (e.g., 1, 2, 4, ..., 16).  
-Each test logs CPU temperature and computation counts in a separate folder (e.g., ``logs_nproc_08``).  
-There is a 60-second cooldown between each run to allow the system to recover.
+This will:
+- Run tests with process counts such as 1, 2, 4, ..., 16
+- Launch worker processes that perform CPU-intensive matrix multiplications
+- Monitor and log CPU temperature every 0.1 seconds
+- Wait 60 seconds between each test for cooldown
 
-The number of completed matrix multiplications is counted to help evaluate the performance impact of thermal throttling and guide selection of an optimal number of processes.
+Each run creates logs in folders like ``logs_nproc_04/`` with a CSV file for each worker process.
 
-### Analyze Results
+### 2. Analyze Results
 
-Open the notebook to compare results across experiments:
+Open the following Jupyter notebook:
 
 ``compare_experiments.ipynb``
 
-This notebook provides:
-
-- Time-series plots of CPU temperature
-- Visualization of throttling events
-- Comparison of computation count and throttling frequency
-- Analysis of optimal parallelism under thermal limits
+You can compare:
+- Computation count per process count
+- Temperature profiles
+- Throttling events
+- Process scaling efficiency
 
 ## Temperature Safety
 
-To protect the system from overheating, the framework includes the following:
+To protect hardware:
 
-- **Force-stop mechanism:**  
-  If the temperature exceeds a threshold (default: ``85.0°C``) for more than ``30 seconds``, all computations are stopped.  
-  This adds software-level safety even if the CPU has built-in thermal throttling or emergency shutdown.
+- If temperature exceeds a threshold (default: ``85°C``) for more than 30 seconds, all processes are terminated.
+- This adds a software-level layer of thermal protection beyond hardware throttling or shutdown mechanisms.
+- An optional pause-on-overheat mode is included but **disabled by default**. It allows the program to wait when overheating instead of stopping entirely.
 
-- **Optional pause-on-overheat:**  
-  The system includes a feature to temporarily pause computations instead of stopping them.  
-  However, this is disabled by default (``enable_sleep=False``), as modern CPUs usually throttle automatically.
-
-You can adjust the threshold with an environment variable:
+Customize the temperature threshold using:
 
 ``TEMP_THRESHOLD=90.0 python experiment_runner.py``
 
 ## Log Format
 
-Each worker process generates a log file ``log_{proc_id}.csv`` with:
+Each process generates ``log_{proc_id}.csv`` with:
 
-- ``timestamp``: ISO8601 time of measurement
-- ``temperature``: Measured CPU temperature in Celsius
-- ``throttling``: ``True`` if the program paused due to high temperature; otherwise ``False``
-- ``count``: Number of matrix multiplication iterations completed
+- ``timestamp`` – ISO 8601 format
+- ``temperature`` – Measured CPU temperature (°C)
+- ``throttling`` – ``True`` if the program paused due to high temp, otherwise ``False``
+- ``count`` – Matrix multiplication iteration count
 
-**Note:** ``throttling`` in this context refers to the application-level pause mechanism, not hardware thermal throttling.
+Note: ``throttling`` here refers to application-level pauses, not hardware-level frequency scaling.
 
-## Notes
+## Performance Insights
 
-- OpenHardwareMonitor must be allowed to run with administrator privileges.
-- The program polls temperature every ``0.1 seconds``, but OpenHardwareMonitor updates roughly every second.  
-  For finer-grained thermal monitoring, alternative methods would be required.
-- Workload consists of repeated matrix multiplications using NumPy to generate realistic CPU load.
+### Optimal Number of Processes
+
+The chart below shows total computation count per process count. It was recorded on an Intel(R) Core(TM) i7-1065G7 (4 cores, 8 threads).
+
+![Computation Count](img/Computaion_Count_vs_Number_of_Processes.PNG)
+
+- The peak occurs at 4 processes — matching the number of physical CPU cores.
+- Performance decreases or plateaus beyond this due to scheduling overhead or thermal limitations.
+- The 2-process dip may stem from transient throttling or uneven core allocation.
+
+### Thermal Behavior Example
+
+Below is a temperature log for 1 process (``logs_nproc_01``):
+
+![Temperature vs Time](img/temp_vs_time_ex.PNG)
+
+- Initially, the temperature rapidly rises past the 85°C threshold.
+- After a short period, the temperature stabilizes around 80°C.
+- This stabilization suggests **hardware-level thermal throttling** is actively regulating the system by reducing CPU frequency or redistributing power.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT License
